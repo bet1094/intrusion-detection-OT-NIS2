@@ -80,22 +80,35 @@ Arquitectura **Lambda** con capas de ingesta, almacenamiento, procesamiento batc
 ## Modelo y resultados
 
 - **Algoritmo:** Random Forest (scikit-learn, 100 árboles, `random_state=42`).
-- **Split:** 80 % train (438 045) / 20 % test (109 512), estratificado.
-- **Features:** `Flow Duration`, `Total Fwd/Bwd Packets`, `Flow Bytes/s`, `Flow Packets/s`, `Packet Length Mean`, `Protocol`, `Dst Port`, `Fwd/Bwd Packet Length Mean`.
-- **Métrica reportada:** accuracy 1,00; macro-F1 1,00 sobre el split aleatorio.
+- **Features (10):** `Flow Duration`, `Total Fwd/Bwd Packets`, `Flow Bytes/s`, `Flow Packets/s`, `Packet Length Mean`, `Protocol`, `Dst Port`, `Fwd/Bwd Packet Length Mean`.
 
-### ⚠ Por qué el 100 % no es un "trofeo" — y por qué lo dejamos documentado
+### Resultado del notebook principal
 
-CICIDS2017 presenta un sesgo ampliamente documentado (Engelen, Vanhoef & Rimmer, 2021): un único ataque genera miles de flujos casi idénticos en ventanas de milisegundos. Un `train_test_split` aleatorio coloca flujos cuasi-duplicados en train **y** test, inflando la métrica.
+El notebook `01_cicids2017_lambda_nis2.ipynb` aplica un `train_test_split` aleatorio 80/20 y reporta **accuracy 1,00 / macro-F1 1,00**. Esa cifra **no es representativa** y se acompaña de un análisis crítico documentado en `notebooks/02_model_audit.ipynb` y en `docs/audit_report.md`.
 
-En este repositorio se incluye **adicionalmente** una evaluación con:
+### Por qué el 100 % es engañoso
 
-- **Deduplicación** previa al split.
-- **Validación cruzada** k-fold estratificada.
-- **Baseline `DummyClassifier`** como referencia.
-- **Matriz de confusión y F1 por clase** para detectar desequilibrios.
+CICIDS2017 presenta un sesgo documentado (Engelen, Vanhoef & Rimmer, 2021): un único ataque genera miles de flujos casi idénticos en ventanas de milisegundos. Un split aleatorio reparte flujos cuasi-duplicados entre train y test, inflando la métrica artificialmente.
 
-El cuaderno `notebooks/02_model_audit.ipynb` contiene esta evaluación robusta. Los resultados reales bajo deduplicación se reportan honestamente ahí.
+### Resultados reales tras auditoría
+
+Tras aplicar **deduplicación exacta**, **baselines comparativos** y **validación cruzada estratificada k=5** sobre el dataset deduplicado:
+
+| Modelo | Accuracy | Macro-F1 |
+|---|---:|---:|
+| DummyClassifier (baseline) | 0,6039 | 0,1506 |
+| LogisticRegression | 0,9649 | 0,6816 |
+| RandomForest (default) | 0,9993 | 0,9969 |
+| **RandomForest (balanced)** | **0,9993** | **0,9975** |
+
+**Validación cruzada k=5 (RandomForest balanced):**
+macro-F1 = **0,9986 ± 0,0007** (folds: 0,9974 · 0,9994 · 0,9987 · 0,9993 · 0,9981)
+
+**Impacto de la deduplicación:** el dataset pasa de **547.557 a 411.103 flujos (24,9 % de duplicados eliminados)**, lo que prueba que uno de cada cuatro flujos era redundante.
+
+**Lectura final:** el modelo no estaba "equivocado", estaba **optimistamente evaluado**. Tras el protocolo correctivo, el rendimiento sigue siendo sobresaliente y, lo más importante, ahora la métrica es reproducible y defendible ante una auditoría externa (requisito implícito en NIS2 e IEC 62443).
+
+Detalle completo: `notebooks/02_model_audit.ipynb` · análisis técnico: `docs/audit_report.md`.
 
 ---
 
